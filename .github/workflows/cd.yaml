@@ -83,4 +83,4 @@ jobs:
 
       - name: Update ECS Service 
         run: |
-          aws ecs update-service --cluster uat-ecs --service ecs-uat-jb-applications-service-td --force-new-deployment --task-definition $NEW_JOBLIST_TASK_DEF_ARN
+          aws ecs update-service --cluster uat-ecs --service uat-jb-applications-service --force-new-deployment --task-definition $NEW_JOBLIST_TASK_DEF_ARN
