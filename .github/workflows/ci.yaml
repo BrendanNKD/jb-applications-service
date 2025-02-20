@@ -1,0 +1,117 @@
+name: CI Test, Build, and Security Workflow
+
+on:
+  pull_request:
+    branches:
+      - feat/**
+      - fix/**
+      - breaking/**
+      - main
+
+permissions:
+  contents: write
+  security-events: write  # Required for SARIF upload
+  pull-requests: read  # Required for scanning PR commits
+
+jobs:
+  test_build_security:
+    runs-on: ubuntu-latest
+    env:
+      APP_PORT: ${{ secrets.APP_PORT }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      # --- Install Bun ---
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "/home/runner/.bun/bin" >> $GITHUB_PATH
+
+      # --- Install Dependencies ---
+      - name: Install Dependencies
+        run: bun install
+
+      # --- SECRET SCANNING (Gitleaks) ---
+      - name: Run Gitleaks Secret Scanning
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      # --- SECURITY SCANNING (Snyk) --
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --sarif-file-output=snyk.sarif
+
+      # --- UPLOAD SARIF RESULTS AS ARTIFACT ---
+      - name: Upload Snyk SARIF as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-security-scan
+          path: snyk.sarif
+          retention-days: 7  # Store for 7 days (adjust as needed)
+
+      # --- UPLOAD SARIF RESULTS TO GITHUB SECURITY ---
+      - name: Upload Snyk results to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk.sarif
+
+      # --- UNIT TESTING ---
+      - name: Run Unit Tests
+        run: bun test
+
+      # --- BUILD BACKEND SERVICE ---
+      - name: Build Backend Service
+        run: bun build server.ts --outdir dist --target node
+
+      # --- INSTALL TRIVY ---
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo tee /etc/apt/trusted.gpg.d/trivy.asc
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      # --- CONTAINER SCANNING (Trivy) ---
+      - name: Build and Scan Docker Image
+        run: |
+          docker build -t bun-app .
+          trivy image --exit-code 0 --severity HIGH,CRITICAL bun-app
+
+      # --- DEBUG ENVIRONMENT VARIABLES --
+      - name: Debug Environment Variables
+        run: env | grep APP_PORT
+
+      # --- RUN BACKEND SERVICE ---
+      - name: Run Built Service
+        env:
+          APP_PORT: ${{ secrets.APP_PORT }}
+        run: |
+          echo "Starting the backend service on port $APP_PORT..."
+          bun run dist/server.js &
+          sleep 5
+
+      # --- HEALTH CHECK ---
+      - name: Health Check
+        env:
+          APP_PORT: ${{ secrets.APP_PORT }}
+        run: |
+          echo "Checking service health on port $APP_PORT..."
+          curl --fail http://localhost:${{ env.APP_PORT }}/health || (echo "Health check failed!" && exit 1)
+
+      # --- CLEANUP BUILD DIRECTORY ---
+      - name: Cleanup Build Directory
+        if: ${{ success() }}
+        run: rm -rf dist

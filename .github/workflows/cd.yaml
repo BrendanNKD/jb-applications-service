@@ -1,0 +1,86 @@
+name: CICD workflow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup AWS Credentials Using OIDC
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: arn:aws:iam::927041702050:role/fullaccess
+          aws-region: ap-southeast-1
+
+      - name: Authenticate Docker with Amazon ECR
+        run: |
+          aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 927041702050.dkr.ecr.ap-southeast-1.amazonaws.com
+
+      # --- DETERMINE VERSION FOR `joblist` SERVICE ---
+      - name: Determine Latest Version
+        id: version_joblist
+        run: |
+          tags=$(aws ecr list-images --repository-name uat/jobboard --query 'imageIds[*].imageTag' --output text | tr '\t' '\n')
+
+          latest_version=$(echo "$tags" | grep -E '^joblist_v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^joblist_v//' | sort -V | tail -n 1)
+
+          if [ -z "$latest_version" ]; then
+            new_version="v1.0.0"
+          else
+            IFS='.' read -r major minor patch <<< "${latest_version#v}"
+
+            if git log -1 --pretty=%B | grep -q 'breaking'; then
+              major=$((major + 1))
+              minor=0
+              patch=0
+            elif git log -1 --pretty=%B | grep -q 'feat'; then
+              minor=$((minor + 1))
+              patch=0
+            else
+              patch=$((patch + 1))
+            fi
+
+            new_version="v$major.$minor.$patch"
+          fi
+
+          echo "Joblist New Version: $new_version"
+          echo "joblist_version=$new_version" >> $GITHUB_ENV
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t 927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:joblist_${{ env.joblist_version }} .
+          docker push 927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:joblist_${{ env.joblist_version }}
+
+      # --- UPDATE ECS TASK DEFINITION FOR `joblist` ---
+      - name: Get Current Task Definition 
+        run: |
+          aws ecs describe-task-definition --task-definition ecs-uat-jb-service-td \
+            --query 'taskDefinition' > joblist-task-definition.json
+
+      - name: Update Task Definition 
+        run: |
+          jq --arg IMAGE "927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:joblist_${{ env.joblist_version }}" '
+            .containerDefinitions[0].image = $IMAGE |
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+          ' joblist-task-definition.json > new-joblist-task-definition.json
+
+      - name: Register New Task Definition 
+        run: |
+          NEW_JOBLIST_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://new-joblist-task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "NEW_JOBLIST_TASK_DEF_ARN=$NEW_JOBLIST_TASK_DEF_ARN" >> $GITHUB_ENV
+
+      - name: Update ECS Service 
+        run: |
+          aws ecs update-service --cluster uat-ecs --service uat-jb-service --force-new-deployment --task-definition $NEW_JOBLIST_TASK_DEF_ARN
