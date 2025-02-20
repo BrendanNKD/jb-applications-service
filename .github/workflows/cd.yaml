@@ -27,7 +27,7 @@ jobs:
         run: |
           aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 927041702050.dkr.ecr.ap-southeast-1.amazonaws.com
 
-      # --- DETERMINE VERSION FOR `joblist` SERVICE ---
+      # --- DETERMINE VERSION FOR SERVICE ---
       - name: Determine Latest Version
         id: version_applications
         run: |
@@ -66,21 +66,21 @@ jobs:
       - name: Get Current Task Definition 
         run: |
           aws ecs describe-task-definition --task-definition ecs-uat-jb-applications-service-td \
-            --query 'taskDefinition' > joblist-task-definition.json
+            --query 'taskDefinition' > applications-task-definition.json
 
       - name: Update Task Definition 
         run: |
-          jq --arg IMAGE "927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:joblist_${{ env.joblist_version }}" '
+          jq --arg IMAGE "927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:applications_${{ env.applications_version }}" '
             .containerDefinitions[0].image = $IMAGE |
             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
-          ' joblist-task-definition.json > new-joblist-task-definition.json
+          ' applications-task-definition.json > new-applications-task-definition.json
 
       - name: Register New Task Definition 
         run: |
-          NEW_JOBLIST_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://new-joblist-task-definition.json \
+          NEW_APPLICATIONS_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://new-applications-task-definition.json \
             --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "NEW_JOBLIST_TASK_DEF_ARN=$NEW_JOBLIST_TASK_DEF_ARN" >> $GITHUB_ENV
+          echo "NEW_APPLICATIONS_TASK_DEF_ARN=$NEW_APPLICATIONS_TASK_DEF_ARN" >> $GITHUB_ENV
 
       - name: Update ECS Service 
         run: |
-          aws ecs update-service --cluster uat-ecs --service uat-jb-applications-service --force-new-deployment --task-definition $NEW_JOBLIST_TASK_DEF_ARN
+          aws ecs update-service --cluster uat-ecs --service uat-jb-applications-service --force-new-deployment --task-definition $NEW_APPLICATIONS_TASK_DEF_ARN
