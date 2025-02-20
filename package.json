@@ -16,6 +16,9 @@
   },
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.750.0",
+    "@aws-sdk/credential-provider-node": "^3.750.0",
+    "dotenv": "^16.4.7",
     "elysia": "^1.2.12",
     "mongoose": "^8.10.1"
   }

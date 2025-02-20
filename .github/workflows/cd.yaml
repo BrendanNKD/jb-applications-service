@@ -29,11 +29,11 @@ jobs:
 
       # --- DETERMINE VERSION FOR `joblist` SERVICE ---
       - name: Determine Latest Version
-        id: version_joblist
+        id: version_applications
         run: |
           tags=$(aws ecr list-images --repository-name uat/jobboard --query 'imageIds[*].imageTag' --output text | tr '\t' '\n')
 
-          latest_version=$(echo "$tags" | grep -E '^joblist_v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^joblist_v//' | sort -V | tail -n 1)
+          latest_version=$(echo "$tags" | grep -E '^applications_v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^applications_v//' | sort -V | tail -n 1)
 
           if [ -z "$latest_version" ]; then
             new_version="v1.0.0"
@@ -54,33 +54,33 @@ jobs:
             new_version="v$major.$minor.$patch"
           fi
 
-          echo "Joblist New Version: $new_version"
-          echo "joblist_version=$new_version" >> $GITHUB_ENV
+          echo "Applications New Version: $new_version"
+          echo "applications_version=$new_version" >> $GITHUB_ENV
 
       - name: Build and Push Docker Image
         run: |
-          docker build -t 927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:joblist_${{ env.joblist_version }} .
-          docker push 927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:joblist_${{ env.joblist_version }}
+          docker build -t 927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:applications_${{ env.applications_version }} .
+          docker push 927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:applications_${{ env.applications_version }}
 
-      # --- UPDATE ECS TASK DEFINITION FOR `joblist` ---
-      - name: Get Current Task Definition 
-        run: |
-          aws ecs describe-task-definition --task-definition ecs-uat-jb-service-td \
-            --query 'taskDefinition' > joblist-task-definition.json
+      # # --- UPDATE ECS TASK DEFINITION FOR `joblist` ---
+      # - name: Get Current Task Definition 
+      #   run: |
+      #     aws ecs describe-task-definition --task-definition ecs-uat-jb-applications-service-td \
+      #       --query 'taskDefinition' > joblist-task-definition.json
 
-      - name: Update Task Definition 
-        run: |
-          jq --arg IMAGE "927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:joblist_${{ env.joblist_version }}" '
-            .containerDefinitions[0].image = $IMAGE |
-            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
-          ' joblist-task-definition.json > new-joblist-task-definition.json
+      # - name: Update Task Definition 
+      #   run: |
+      #     jq --arg IMAGE "927041702050.dkr.ecr.ap-southeast-1.amazonaws.com/uat/jobboard:joblist_${{ env.joblist_version }}" '
+      #       .containerDefinitions[0].image = $IMAGE |
+      #       del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+      #     ' joblist-task-definition.json > new-joblist-task-definition.json
 
-      - name: Register New Task Definition 
-        run: |
-          NEW_JOBLIST_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://new-joblist-task-definition.json \
-            --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "NEW_JOBLIST_TASK_DEF_ARN=$NEW_JOBLIST_TASK_DEF_ARN" >> $GITHUB_ENV
+      # - name: Register New Task Definition 
+      #   run: |
+      #     NEW_JOBLIST_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://new-joblist-task-definition.json \
+      #       --query 'taskDefinition.taskDefinitionArn' --output text)
+      #     echo "NEW_JOBLIST_TASK_DEF_ARN=$NEW_JOBLIST_TASK_DEF_ARN" >> $GITHUB_ENV
 
-      - name: Update ECS Service 
-        run: |
-          aws ecs update-service --cluster uat-ecs --service uat-jb-service --force-new-deployment --task-definition $NEW_JOBLIST_TASK_DEF_ARN
+      # - name: Update ECS Service 
+      #   run: |
+      #     aws ecs update-service --cluster uat-ecs --service ecs-uat-jb-applications-service-td --force-new-deployment --task-definition $NEW_JOBLIST_TASK_DEF_ARN
