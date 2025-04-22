@@ -5,6 +5,7 @@ import { healthRoutes } from "./src/routes/healthRoutes";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { defaultProvider } from "@aws-sdk/credential-provider-node";
 import dotenv from 'dotenv';
+import cors from "@elysiajs/cors";
 
 /**
  * Loads production secrets from AWS Secrets Manager.
@@ -44,13 +45,21 @@ async function startServer() {
 
   const app = new Elysia();
 
+  app.use(
+    cors({
+      origin: '*',                        // allow all origins
+      methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+      allowedHeaders: ['Content-Type','Authorization'], // allow your token header
+      credentials: false                  // default; no cookies or HTTP auth
+    })
+  )
   // Register the health routes without protection.
   healthRoutes(app);
 
   // Apply guard only for the job listing routes.
   app.guard(
     {
-      async beforeHandle({ headers, request, error }) {
+      async beforeHandle({ headers, request, error, store }) {
         console.log("Requested URL:", request.url);
         // Extract the Bearer token from the Authorization header (case-insensitive)
         const authHeader = headers["Authorization"] || headers["authorization"];
@@ -75,6 +84,8 @@ async function startServer() {
           if (!authData.valid) {
             return error(401, authData.message);
           }
+          (store as any).username = authData.username;
+
         } catch (err) {
           return error(500, "Error verifying token");
         }
@@ -88,7 +99,7 @@ async function startServer() {
   );
 
   app.listen(APP_PORT, () => {
-    console.log("Server running on http://localhost:3000");
+    console.log("Server running on http://localhost:3001");
   });
 
   // Connect to MongoDB after starting the server.
