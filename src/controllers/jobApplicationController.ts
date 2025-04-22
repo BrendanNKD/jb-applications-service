@@ -29,6 +29,70 @@ export const getAllJobApplications = async (): Promise<ControllerResult> => {
     }
   };
   
+  // GET a job application by ID with resume transformed.
+export const getJobApplicationById = async (
+  id: string
+): Promise<ControllerResult> => {
+  try {
+    const application = await JobApplication.findById(id);
+    if (!application) {
+      return { success: false, error: "Job application not found", status: 404 };
+    }
+    const appObj = application.toObject();
+    if (appObj.resume) {
+      appObj.resume = { filename: appObj.resume.filename } as any;
+    }
+    return { success: true, data: appObj };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+};
+
+// GET job applications by createdBy with resume transformed.
+export const getJobApplicationsByCreatedBy = async (
+  createdBy: string
+): Promise<ControllerResult> => {
+  try {
+    const applications = await JobApplication.find({ createdBy });
+    const transformedApplications = applications.map((app) => {
+      const appObj = app.toObject();
+      if (appObj.resume) {
+        appObj.resume = { filename: appObj.resume.filename } as any;
+      }
+      return appObj;
+    });
+    return { success: true, data: transformedApplications };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+};
+
+// Update only the status field of a job application.
+export const updateJobApplicationStatus = async (
+  id: string,
+  newStatus: "pending" | "reviewed" | "accepted" | "rejected"
+): Promise<ControllerResult> => {
+  try {
+    // Update the status and optionally record an update timestamp.
+    const updatedApplication = await JobApplication.findByIdAndUpdate(
+      id,
+      { status: newStatus, updatedAt: new Date() },
+      { new: true }
+    );
+    if (!updatedApplication) {
+      return { success: false, error: "Job application not found", status: 404 };
+    }
+    // Transform the resume field if it exists.
+    const appObj = updatedApplication.toObject();
+    if (appObj.resume) {
+      appObj.resume = { filename: appObj.resume.filename } as any;
+    }
+    return { success: true, data: appObj };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+};
+
 
 // CREATE a new job application remains largely unchanged.
 export const createJobApplication = async (

@@ -50,7 +50,7 @@ async function startServer() {
   // Apply guard only for the job listing routes.
   app.guard(
     {
-      async beforeHandle({ headers, request, error }) {
+      async beforeHandle({ headers, request, error, store }) {
         console.log("Requested URL:", request.url);
         // Extract the Bearer token from the Authorization header (case-insensitive)
         const authHeader = headers["Authorization"] || headers["authorization"];
@@ -75,6 +75,8 @@ async function startServer() {
           if (!authData.valid) {
             return error(401, authData.message);
           }
+          (store as any).username = authData.username;
+
         } catch (err) {
           return error(500, "Error verifying token");
         }
@@ -88,7 +90,7 @@ async function startServer() {
   );
 
   app.listen(APP_PORT, () => {
-    console.log("Server running on http://localhost:3000");
+    console.log("Server running on http://localhost:3001");
   });
 
   // Connect to MongoDB after starting the server.
