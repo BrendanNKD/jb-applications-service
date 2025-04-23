@@ -26,6 +26,20 @@ async function loadProdSecrets() {
   process.env.MONGO_PASSWORD = secret.MONGO_PASSWORD;
   process.env.MONGO_HOST = secret.MONGO_HOST;
   process.env.MONGO_DB = secret.MONGO_DB;
+
+      // --- new endpoints secret ---
+      const endpointsCmd = new GetSecretValueCommand({ SecretId: 'prod/endpoints' });
+      const endpointsResp = await client.send(endpointsCmd);
+      if (!endpointsResp.SecretString) {
+        throw new Error("No secret string returned for prod/endpoints.");
+      }
+      const endpointsSecret = JSON.parse(endpointsResp.SecretString);
+      // assume your secret JSON contains a key called AUTH_BASE_URL
+      if (!endpointsSecret.AUTH_BASE_URL) {
+        throw new Error("prod/endpoints is missing AUTH_BASE_URL field.");
+      }
+      process.env.AUTH_BASE_URL = endpointsSecret.AUTH_BASE_URL;
+
 }
 
 async function startServer() {
@@ -70,7 +84,7 @@ async function startServer() {
         const token = authHeader.substring("Bearer ".length);
         try {
           // Call your authentication endpoint.
-          const res = await fetch("http://localhost:8080/authenticate", {
+          const res = await fetch(process.env.AUTH_BASE_URL+ "/authenticate", {
             method: "GET",
             headers: {
               "Content-Type": "application/json",
