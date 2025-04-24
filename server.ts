@@ -67,6 +67,8 @@ async function startServer() {
       credentials: false                  // default; no cookies or HTTP auth
     })
   )
+  .state({username: "", role: ""})
+
   // Register the health routes without protection.
   healthRoutes(app);
 
@@ -98,7 +100,10 @@ async function startServer() {
           if (!authData.valid) {
             return error(401, authData.message);
           }
+
           (store as any).username = authData.username;
+          (store as any).role = authData.role;
+
 
         } catch (err) {
           return error(500, "Error verifying token");
