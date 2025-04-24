@@ -1,7 +1,7 @@
 // routes/jobApplicationRoutes.ts
 import { Elysia } from "elysia";
 import mongoose from "mongoose";
-import { createJobApplication, getAllJobApplications, getJobApplicationById, getJobApplicationsByCreatedBy, updateJobApplicationStatus } from "../controllers/jobApplicationController";
+import { createJobApplication, getAllJobApplications, getJobApplicationById, getJobApplicationsByCreatedBy, getJobApplicationsByJobId, updateJobApplicationStatus } from "../controllers/jobApplicationController";
 
 export const jobApplicationRoutes = (app: Elysia) => {
   // GET all job applications (transforms resume to only return filename)
@@ -35,6 +35,21 @@ export const jobApplicationRoutes = (app: Elysia) => {
     });
   });
 
+    // New endpoint to list all applications for a specific job
+    app.get("/v1/api/job/:jobId", async ({ params }) => {
+      const result = await getJobApplicationsByJobId(params.jobId);
+      if (!result.success) {
+        return new Response(JSON.stringify({ error: result.error }), {
+          status: result.status || 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify(result.data), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
   // New endpoint to get all job applications created by the authenticated user
   app.get("/v1/api/created", async ({ store }) => {
 
@@ -59,12 +74,10 @@ export const jobApplicationRoutes = (app: Elysia) => {
     });
   });
 
-
-
-
   // CREATE a new job application using multipart/form-data
   app.post("/v1/api/", async ({ request, store }) => {
     // Check if the user has the "employer" role
+    console.log((store as any).role)
     if ((store as any).role !== "jobseeker") {
       return new Response(JSON.stringify({ error: "Not authorized" }), {
         status: 401,

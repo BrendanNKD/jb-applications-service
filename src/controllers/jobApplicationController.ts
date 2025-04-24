@@ -48,6 +48,33 @@ export const getJobApplicationById = async (
   }
 };
 
+export const getJobApplicationsByJobId = async (
+  jobId: string
+): Promise<ControllerResult> => {
+  try {
+    // find all applications whose `job` field matches jobId
+    const applications = await JobApplication.find({ job: jobId });
+
+    // convert to plain objects and strip out raw resume data
+    const data = applications.map((app) => {
+      const obj = app.toObject();
+      if (obj.resume) {
+        // only expose filename, not the Buffer
+        obj.resume = { filename: obj.resume.filename } as any;
+      }
+      return obj;
+    });
+
+    return { success: true, data };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message,
+      status: 500,
+    };
+  }
+}
+
 // GET job applications by createdBy with resume transformed.
 export const getJobApplicationsByCreatedBy = async (
   createdBy: string
