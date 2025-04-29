@@ -1,50 +1,53 @@
 // controllers/jobApplicationController.ts
 import mongoose from "mongoose";
 import { JobApplication, type IJobApplication } from "../models/applications";
+import ControllerResultFactory from "../factories/controllerResultFactory";
+
+// GET all job applications with resume transformed to include only the filename.
 
 interface ControllerResult {
   success: boolean;
   data?: any;
   error?: string;
   status?: number;
+  metadata?: Record<string, any>;
 }
 
-// GET all job applications with resume transformed to include only the filename.
+
 export const getAllJobApplications = async (): Promise<ControllerResult> => {
-    try {
-      const applications = await JobApplication.find();
-  
-      const transformedApplications = applications.map((app) => {
-        const appObj = app.toObject();
-        if (appObj.resume) {
-          // Cast to "any" to suppress the type error.
-          appObj.resume = { filename: appObj.resume.filename } as any;
-        }
-        return appObj;
-      });
-  
-      return { success: true, data: transformedApplications };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  };
-  
-  // GET a job application by ID with resume transformed.
+  try {
+    const applications = await JobApplication.find();
+
+    const transformedApplications = applications.map((app) => {
+      const appObj = app.toObject();
+      if (appObj.resume) {
+        appObj.resume = { filename: appObj.resume.filename } as any;
+      }
+      return appObj;
+    });
+
+    return ControllerResultFactory.success(transformedApplications);
+  } catch (error: any) {
+    return ControllerResultFactory.fromError(error);
+  }
+};
+
+// GET a job application by ID with resume transformed.
 export const getJobApplicationById = async (
   id: string
 ): Promise<ControllerResult> => {
   try {
     const application = await JobApplication.findById(id);
     if (!application) {
-      return { success: false, error: "Job application not found", status: 404 };
+      return ControllerResultFactory.notFound("Job application not found");
     }
     const appObj = application.toObject();
     if (appObj.resume) {
       appObj.resume = { filename: appObj.resume.filename } as any;
     }
-    return { success: true, data: appObj };
+    return ControllerResultFactory.success(appObj);
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return ControllerResultFactory.fromError(error);
   }
 };
 
@@ -52,26 +55,19 @@ export const getJobApplicationsByJobId = async (
   jobId: string
 ): Promise<ControllerResult> => {
   try {
-    // find all applications whose `job` field matches jobId
     const applications = await JobApplication.find({ job: jobId });
 
-    // convert to plain objects and strip out raw resume data
     const data = applications.map((app) => {
       const obj = app.toObject();
       if (obj.resume) {
-        // only expose filename, not the Buffer
         obj.resume = { filename: obj.resume.filename } as any;
       }
       return obj;
     });
 
-    return { success: true, data };
+    return ControllerResultFactory.success(data);
   } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-      status: 500,
-    };
+    return ControllerResultFactory.fromError(error);
   }
 }
 
@@ -88,9 +84,9 @@ export const getJobApplicationsByCreatedBy = async (
       }
       return appObj;
     });
-    return { success: true, data: transformedApplications };
+    return ControllerResultFactory.success(transformedApplications);
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return ControllerResultFactory.fromError(error);
   }
 };
 
@@ -100,28 +96,25 @@ export const updateJobApplicationStatus = async (
   newStatus: "pending" | "reviewed" | "accepted" | "rejected"
 ): Promise<ControllerResult> => {
   try {
-    // Update the status and optionally record an update timestamp.
     const updatedApplication = await JobApplication.findByIdAndUpdate(
       id,
       { status: newStatus, updatedAt: new Date() },
       { new: true }
     );
     if (!updatedApplication) {
-      return { success: false, error: "Job application not found", status: 404 };
+      return ControllerResultFactory.notFound("Job application not found");
     }
-    // Transform the resume field if it exists.
     const appObj = updatedApplication.toObject();
     if (appObj.resume) {
       appObj.resume = { filename: appObj.resume.filename } as any;
     }
-    return { success: true, data: appObj };
+    return ControllerResultFactory.success(appObj);
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return ControllerResultFactory.fromError(error);
   }
 };
 
-
-// CREATE a new job application remains largely unchanged.
+// CREATE a new job application
 export const createJobApplication = async (
   payload: Partial<IJobApplication> & { resumeBase64?: string }
 ): Promise<ControllerResult> => {
@@ -134,15 +127,15 @@ export const createJobApplication = async (
       payload.resume = {
         data: Buffer.from(payload.resumeBase64, "base64"),
         contentType: "application/pdf",
-        filename: "", // Optionally, you can set a default or extract a filename from another source.
+        filename: "",
       };
       delete payload.resumeBase64;
     }
 
     const newApplication = new JobApplication(payload);
     const savedApplication = await newApplication.save();
-    return { success: true, data: savedApplication };
+    return ControllerResultFactory.success(savedApplication, 201);
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return ControllerResultFactory.fromError(error);
   }
 };
