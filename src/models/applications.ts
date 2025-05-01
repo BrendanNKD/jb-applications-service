@@ -13,6 +13,7 @@ export interface IJobApplication extends Document {
   coverLetter?: string;
   appliedAt: Date;
   status: "pending" | "reviewed" | "accepted" | "rejected";
+  createdBy:string;
 }
 
 const jobApplicationSchema: Schema<IJobApplication> = new Schema({
@@ -53,6 +54,9 @@ const jobApplicationSchema: Schema<IJobApplication> = new Schema({
     enum: ["pending", "reviewed", "accepted", "rejected"],
     default: "pending",
   },
+  createdBy:{
+    type: String
+  }
 });
 
 export const JobApplication = mongoose.model<IJobApplication>(

@@ -77,6 +77,7 @@ export const jobApplicationRoutes = (app: Elysia) => {
   // CREATE a new job application using multipart/form-data
   app.post("/v1/api/", async ({ request, store }) => {
     // Check if the user has the "employer" role
+    const currentUsername = (store as any).username;
     console.log((store as any).role)
     if ((store as any).role !== "jobseeker") {
       return new Response(JSON.stringify({ error: "Not authorized" }), {
@@ -127,6 +128,7 @@ export const jobApplicationRoutes = (app: Elysia) => {
           contentType: resumeFile.type || "application/pdf",
           filename: resumeFile.name, // <-- Storing the filename
         },
+        createdBy: currentUsername.toString()
       };
 
       const result = await createJobApplication(payload);
