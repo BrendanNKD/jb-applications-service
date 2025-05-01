@@ -58,11 +58,11 @@ async function startServer() {
   }
 
   const app = new Elysia();
-
+ 
   app.use(
     cors({
       origin: '*',                        // allow all origins
-      methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+      methods: ['GET','POST','PUT','DELETE','OPTIONS','PATCH'],
       allowedHeaders: ['Content-Type','Authorization'], // allow your token header
       credentials: false                  // default; no cookies or HTTP auth
     })
