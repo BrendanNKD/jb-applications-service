@@ -211,12 +211,6 @@ app.patch("/v1/api/:id/status", async ({ params, request, store }) => {
   
   // For protection, verify that the current user is allowed to update this application.
   // For example, if the application has a "createdBy" field, ensure it matches the current username.
-  if (appResult.data.createdBy !== currentUsername) {
-    return new Response(JSON.stringify({ error: "Not authorized to update this application" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
 
   // Now, update the status of the job application.
   const result = await updateJobApplicationStatus(params.id, newStatus);
@@ -231,8 +225,6 @@ app.patch("/v1/api/:id/status", async ({ params, request, store }) => {
     headers: { "Content-Type": "application/json" },
   });
 });
-
-
 
 
 };
