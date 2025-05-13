@@ -83,7 +83,7 @@ jobs:
 
       # --- UNIT TESTING ---
       - name: Run Unit Tests
-        run: bun test
+        run: bun test --coverage
 
       # --- BUILD BACKEND SERVICE ---
       - name: Build Backend Service
